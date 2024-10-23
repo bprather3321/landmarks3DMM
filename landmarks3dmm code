@@ -1,0 +1,68 @@
+import torch
+import math
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+# Generate sphere vertices and normals
+def create_sphere(num_points=100):
+    """ Create a 3D sphere and return its vertices and normals. """
+    theta = torch.linspace(0, math.pi, num_points)
+    phi = torch.linspace(0, 2 * math.pi, num_points)
+    theta, phi = torch.meshgrid(theta, phi)
+
+    # Parametric equations for a unit sphere
+    x = torch.sin(theta) * torch.cos(phi)
+    y = torch.sin(theta) * torch.sin(phi)
+    z = torch.cos(theta)
+
+    vertices = torch.stack((x, y, z), dim=-1).reshape(-1, 3)  # (N, 3)
+    normals = vertices  # On a unit sphere, normal = vertex position
+    return vertices, normals
+
+# Spherical Harmonics basis functions for L = 2 (2 bands, 4 coefficients)
+def spherical_harmonics_basis(normals):
+    """ Compute the SH basis for each vertex normal. """
+    x, y, z = normals[:, 0], normals[:, 1], normals[:, 2]
+
+    # SH Basis (up to 2 bands, 4 coefficients)
+    Y_0_0 = 0.282095  # L=0, m=0
+    Y_1_0 = 0.488603 * z  # L=1, m=0
+    Y_1_1 = 0.488603 * x  # L=1, m=1
+    Y_1_n1 = 0.488603 * y  # L=1, m=-1
+
+    return torch.stack((Y_0_0, Y_1_0, Y_1_1, Y_1_n1), dim=-1)  # (N, 4)
+
+# Lambertian shading using Spherical Harmonics
+def lambertian_shading(normals, sh_coeffs):
+    """ Apply Lambertian shading using SH lighting. """
+    sh_basis = spherical_harmonics_basis(normals)  # (N, 4)
+    shaded_colors = torch.matmul(sh_basis, sh_coeffs)  # (N,)
+    return shaded_colors
+
+# Main function
+def render_sphere_with_sh_lighting():
+    # Generate sphere vertices and normals
+    vertices, normals = create_sphere()
+
+    # Assume a simple light direction and SH coefficients
+    light_dir = torch.tensor([1.0, 1.0, 1.0])  # Arbitrary light direction
+    light_dir = light_dir / torch.norm(light_dir)  # Normalize
+
+    # SH coefficients for diffuse light from a single direction
+    sh_coeffs = torch.tensor([0.5, 0.7, 0.3, 0.1])  # Example coefficients
+
+    # Compute per-vertex shading using SH
+    shaded_colors = lambertian_shading(normals, sh_coeffs)
+
+    # Normalize shading to a [0, 1] range for color visualization
+    shaded_colors = (shaded_colors - shaded_colors.min()) / (shaded_colors.max() - shaded_colors.min())
+
+    # Plot the shaded sphere
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], c=shaded_colors, cmap='inferno', marker='o')
+    ax.set_title('Lambertian Shaded Sphere using Spherical Harmonics')
+    plt.show()
+
+# Run the rendering function
+render_sphere_with_sh_lighting()    
